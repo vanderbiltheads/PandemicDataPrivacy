@@ -1,6 +1,3 @@
-"""
-Functions for parallel Monte Carlo simulations of COVID cases over time.
-"""
 
 # import libraries
 import pandas as pd
