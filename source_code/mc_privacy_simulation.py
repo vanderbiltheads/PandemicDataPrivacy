@@ -1,3 +1,6 @@
+"""
+Functions for parallel Monte Carlo simulations of COVID cases over time.
+"""
 
 # import libraries
 import pandas as pd
@@ -66,9 +69,9 @@ def generalize(df, ind_col = "fips", ages = False, races = False, sexes = False,
                     .agg({'counts':'sum'})\
                     .astype({'counts':int}).reset_index()
     
-    new_temp['bins'] = new_temp['sex'] + ',' + \
-                        new_temp['race'] + ',' + \
-                        new_temp['ethnicity'] + ',' + \
+    new_temp['bins'] = new_temp['sex'] + '__' + \
+                        new_temp['race'] + '__' + \
+                        new_temp['ethnicity'] + '__' + \
                         new_temp['age'].astype(str)
     
     return new_temp.pivot_table(index = ind_col, columns = 'bins', values = 'counts')
@@ -402,6 +405,161 @@ class privacy_risk_estimation_marketer:
             else:
                 self.count_per_bin()
                 self.marketer[date] = self.calc_marketer_risk()
+        
+    def get_stats(self, df, percentiles):
+        
+        """
+        Helper function to generate summary statistics on the simulation results.
+        """
+        
+        stats = np.percentile(df, percentiles, axis=0)
+        results = pd.DataFrame()
+        results['date'] = self.dates
+        results['lower'] = stats[0, :]
+        results['mean'] = np.mean(df, axis=0).values
+        results['upper'] = stats[1, :]
+
+        return results
+
+class privacy_risk_estimation_ldiversity:
+    
+    """
+    Uses Monte Carlo sampling techniques (without replacement) to estimate the longitudinal risk of a
+    successful homogeneity attach to learn sensitive attributes about the individuals in the dataset.
+    The sensitive attribute here is the date/week of diagnosis, which follows the approach of the CDC's
+    COVID-19 Restricted Access Dataset. The risk is estimated for the scenario of sharing patient-level
+    pandemic data on a consistent basis (e.g., daily or weekly). The proportion of records that do note
+    meet the l-diversity threshold is estimated for each time point in a given county, when sharing data
+    under a specific data sharing policy (which defines the demographic bins). The privacy risk values are 
+    calculated on the cumulative dataset over time.
+    
+    Input:
+    counts = Dataframe of the case counts per time period (e.g. daily counts of new disease cases from
+             the JHU COVID-19 surveillance data). Must include the fips code in the index and the columns
+             must be date values.
+    gen_census = The generalized census, i.e., the output of the generalize function above for the
+                 specified fips code.
+    fips = The fips code of interest. Must be of the same format of the counts dataframe index column.
+    n_sims = The number of simulations to be run in the experiment.
+    l = The l-diversity threshold (integer).
+    
+    Output:
+    self.diversity = Dataframe where each row is a unique simulation and each column is a time period.
+                    Each cell value corresponds to each row's (simulation's) marketer risk on
+                    that time period, calculated on the cumulative dataset through that time period.
+    """
+    
+    def __init__(self, counts, gen_census, fips, n_sims, l, rng=np.random.default_rng()):
+        
+        self.counts = counts.loc[fips,:].values
+        self.dates = counts.columns
+        self.census = gen_census
+        self.n_bins = len(self.census.columns)
+        self.diversity = pd.DataFrame(columns = self.dates)
+        self.n_sims = n_sims
+        self.xk = np.arange(self.n_sims)
+        self.rng = rng
+        self.dates_per_bin = np.zeros((self.n_sims, self.n_bins))
+        self.all_cases = np.zeros((self.n_sims, self.n_bins))
+        self.l = l
+        
+    def create_full_population(self):
+        
+        """
+        Creates full population from generalized census counts.
+        """
+        
+        self.full_pop = np.tile(self.census.values, (self.n_sims,1))
+        
+    def get_infected_population(self):
+        
+        """
+        Creates the infected population for each simulation.
+        """
+        
+        ppl = self.full_pop[0]
+        self.indexed_pop = np.concatenate(list(map(lambda i: np.repeat(i, ppl[i]), range(len(ppl)))),axis=0)
+        
+        # if more than one equivalence class, randomly choose infected from full population
+        if len(self.full_pop[0]) > 1:
+            self.choose_infected()
+        else:
+            self.choose_infected(False)
+        
+    def choose_infected(self, true_shuffle=True):
+        
+        """
+        Monte Carlo random samples without replacement the infected indviduals from the population.
+        """
+        
+        total_ppl = self.counts.sum()
+        
+        if true_shuffle:
+            self.infected = np.stack(list(map(lambda sim: self.rng.choice(self.indexed_pop,
+                                                                          size=total_ppl,
+                                                                          replace=False),
+                                         range(self.n_sims))), axis=0)
+        else:
+            row = self.indexed_pop[:total_ppl]
+            self.infected = np.tile(row, (self.n_sims, 1))
+            
+        #del self.indexed_pop
+    
+    def count_per_bin(self):
+            
+        """
+        Counts the number of infected individuals in each demographic bin for the current time
+        period's infections. Also adds another unique date value to each bin in each simulation.
+        """
+        
+        # split shuffled values on sample size
+        samples, self.infected = np.split(self.infected, [self.n_ppl], axis=1)
+
+        # add new date to bin
+        for i in self.xk:            
+            sim = samples[i,:]
+            self.dates_per_bin[i,np.unique(sim)] += 1
+            
+        # add new infected people per bin
+        for i in samples.T:
+            self.all_cases[self.xk,i] += 1
+        
+    def calc_prop_homogenous(self):
+        
+        """
+        Calculates the proportion of the records on the cumulative dataset who do
+        not meet the l-diversity threshold for date values.
+        """
+        
+        select = (self.dates_per_bin < self.l) * 1
+        return (self.all_cases * select).sum(axis=1) / self.all_cases.sum(axis=1)
+        
+    def run_full_simulation(self):
+        
+        """
+        Runs the full simulation.
+        """
+        
+        self.create_full_population()
+        self.get_infected_population()
+        
+        fill_zeros = True
+        
+        for i in range(len(self.dates)):
+            date = self.dates[i]
+            self.n_ppl = self.counts[i]
+            
+            if fill_zeros:
+                if (self.n_ppl == 0):
+                    self.diversity[date] = [0] * self.n_sims
+                else:
+                    self.count_per_bin()
+                    self.diversity[date] = self.calc_prop_homogenous()
+                    fill_zeros = False
+                
+            else:
+                self.count_per_bin()
+                self.diversity[date] = self.calc_prop_homogenous()
         
     def get_stats(self, df, percentiles):
         
@@ -798,7 +956,7 @@ class dynamic_policy_search_PK:
         ages = list(self.age_hier.keys())
         races = list(self.race_hier.keys())
         sexes = list(self.sex_hier.keys())
-        eths = list(test.ethnicity_hier.keys())
+        eths = list(self.ethnicity_hier.keys())
 
         all_combinations = list(itertools.product(*[ages,races,sexes,eths]))
         combos = pd.DataFrame({'scale':np.array(all_combinations).sum(axis=1)})
@@ -968,7 +1126,7 @@ class dynamic_policy_search_marketer:
         ages = list(self.age_hier.keys())
         races = list(self.race_hier.keys())
         sexes = list(self.sex_hier.keys())
-        eths = list(test.ethnicity_hier.keys())
+        eths = list(self.ethnicity_hier.keys())
 
         all_combinations = list(itertools.product(*[ages,races,sexes,eths]))
         combos = pd.DataFrame({'scale':np.array(all_combinations).sum(axis=1)})
