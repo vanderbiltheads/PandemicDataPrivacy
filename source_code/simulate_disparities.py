@@ -1,6 +1,6 @@
 """
 Code for generating synthetic infectious diseases surveillance data with simulated
-subpopulation outbreaks.
+disparities (subpopulation outbreaks).
 """
 
 import numpy as np
