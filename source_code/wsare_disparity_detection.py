@@ -1,5 +1,5 @@
 """
-Complete set of WSARE variations.
+Complete set of What's Strange About Recent Events (WSARE) implementations.
 """
 
 import pandas as pd
