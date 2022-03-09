@@ -5,8 +5,10 @@ Responding to a pandemic requires the timely dissemination of relevant health in
 We additionally evaluate how well dynamic policies informed by the privacy risk estimation framework enable *disparity detection* using partially synthetic data. The code used to generate the partially synthetic data; to apply 3 different dynamic policies and 2 policies derived from current, public COVID-19 datasets; and to implement the What's Strange About Recent Events (WSARE) outbreak detection algorithm can be found in [source code](source_code). Note, there is no standard package for WSARE, motivating the need to develop our own script.
 
 ## Repo Contents
- [source_code](source_code): code of framework implementation
+ [source_code](source_code): Code for privacy risk estimation framework, simulating infectious disease surveillance data with disparate trends, de-identifying partially synthetic data according to several dynamic and traditional de-identification methods, and detecting disparities using WSARE.
+ 
  [data](data): Example datasets used in demos.
+ 
  [demos](demos): Multiple jupyter notebook demonstrations of the framework's code and implementation.
 ## System Requirements
 The code was developed and tested in Python version 3.8. Python package requirements: itertools, numpy, and pandas. The software has been tested on Mac OSX 11.x.
