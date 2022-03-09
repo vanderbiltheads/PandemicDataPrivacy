@@ -1,6 +1,6 @@
 """
 Functions for various dynamic policy and traditional policy de-identification methods applied to 
-simulated subpopulation outbreak detection data.
+simulated subpopulation disparity detection (subpopulation outbreak) data.
 """
 
 import numpy as np 
@@ -57,8 +57,6 @@ def marketer_outbreak_detection_deid(df, key, age_name, race_name, sex_name, eth
     return policy_indexed_df, policies
 
 
-
-
 ## Dynamic policy - PK risk approach
 # This function considers the case where demographic granularity fluctuates with the number of new case records
 # over time, without changing the generalization of previously released records.
@@ -103,8 +101,6 @@ def PK_outbreak_detection_deid(df, lag, key, age_name, race_name, sex_name, ethn
     policy_indexed_df = pd.merge(df, min_per_week.drop('n_records', axis=1), left_on='date', right_index=True, how='left').fillna(method='bfill')
 
     return policy_indexed_df.astype({'policy':int}), policies
-
-
 
 
 ## CDC Public Access with Geography Policy
@@ -155,14 +151,12 @@ def CDCpubwGEO_outbreak_detection_deid(df):
     return df_newdate, date_key
 
 
+## Marginal Counts by feature value policy
 
-
-## Counts by feature value policy
-
-def Groupby_counts_outbreak_detection_deid(df, ft_cols, age_group = True):
+def Marginal_counts_outbreak_detection_deid(df, ft_cols, age_group = True):
     
     """
-    Transforms the dataset into a form that mimics the the information provided by groupby 
+    Transforms the dataset into a form that mimics the the information provided by marginal 
     counts by feature value when processed by WSARE algorithm. This module effectively creates
     a new record for each unique value of each demographic quasi-identifier, where there is only one
     feature column. Returns transformed dataset.
